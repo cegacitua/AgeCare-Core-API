@@ -1,0 +1,33 @@
+# Python / Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases
+agecare.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment Variables & Secrets
+.env
+!.env.example
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs & Temporary Files
+*.log
+.direnv/
+
+# IDE & Editor Configs
+.idea/
+.vscode/
+*.swp
+*.swo
