@@ -21,7 +21,7 @@ from app.schemas.patient import (
     WearableStatusResponse
 )
 from app.schemas.vital import TodaySummaryResponse, SummaryHighlightDTO
-from app.api.deps import get_current_user, get_patient_membership
+from app.api.deps import get_current_user, get_patient_membership, require_patient_roles
 
 router = APIRouter(tags=["Pacientes y Círculo de Cuidado"])
 
@@ -150,7 +150,7 @@ async def get_patient_detail(
 async def update_patient(
     patient_id: str,
     data: PatientUpdate,
-    membership: PatientMember = Depends(get_patient_membership),
+    membership: PatientMember = Depends(require_patient_roles(["family"])),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(Patient).where(Patient.id == patient_id, Patient.deleted_at.is_(None))
@@ -186,17 +186,61 @@ async def get_patient_today_summary(
     pat = res.scalar_one_or_none()
     pat_name = pat.full_name if pat else "El paciente"
 
+    # 1. Alertas
+    from app.models.alert import Alert
+    stmt_alerts = select(Alert).where(Alert.patient_id == patient_id, Alert.status == "pending")
+    res_alerts = await db.execute(stmt_alerts)
+    alerts = res_alerts.scalars().all()
+    active_alerts_count = len(alerts)
+    
+    status_val = "ok"
+    top_reason = "Sin alertas registradas"
+    summary = f"{pat_name} se encuentra en estado estable y dentro de los rangos normales."
+    
+    if any(a.severity == "critical" for a in alerts):
+        status_val = "attention"
+        top_reason = "Alerta crítica"
+        summary = f"{pat_name} requiere atención inmediata debido a alertas críticas."
+    elif active_alerts_count > 0:
+        status_val = "warning"
+        top_reason = alerts[0].title
+        summary = f"{pat_name} presenta algunas advertencias que requieren revisión."
+
+    # 2. Adherencia a medicamentos (Hoy)
+    from app.models.medication import ScheduledDose
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt_doses = select(ScheduledDose).where(
+        ScheduledDose.patient_id == patient_id,
+        ScheduledDose.scheduled_at >= today_start
+    )
+    res_doses = await db.execute(stmt_doses)
+    doses = res_doses.scalars().all()
+    total_doses = len(doses)
+    taken_doses = sum(1 for d in doses if d.status == "taken")
+    adherence_pct = int((taken_doses / total_doses * 100)) if total_doses > 0 else 100
+
+    # 3. Signos vitales más recientes
+    from app.models.vital import VitalReading
+    stmt_hr = select(VitalReading).where(VitalReading.patient_id == patient_id, VitalReading.type == "heart_rate").order_by(VitalReading.measured_at.desc()).limit(1)
+    stmt_steps = select(VitalReading).where(VitalReading.patient_id == patient_id, VitalReading.type == "steps").order_by(VitalReading.measured_at.desc()).limit(1)
+    
+    hr_res = (await db.execute(stmt_hr)).scalar_one_or_none()
+    steps_res = (await db.execute(stmt_steps)).scalar_one_or_none()
+    
+    hr_val = f"{int(hr_res.value)} lpm" if hr_res else "--"
+    steps_val = f"{int(steps_res.value)}" if steps_res else "--"
+
     return TodaySummaryResponse(
-        wellbeing_status="ok",
+        wellbeing_status=status_val,
         date=datetime.now(timezone.utc),
-        summary=f"{pat_name} se encuentra en estado estable y dentro de los rangos normales.",
-        top_reason="Sin alertas registradas",
-        active_alerts_count=0,
-        adherence_pct=95,
+        summary=summary,
+        top_reason=top_reason,
+        active_alerts_count=active_alerts_count,
+        adherence_pct=adherence_pct,
         highlights=[
-            SummaryHighlightDTO(icon_key="heart", icon="heart", label="Ritmo cardíaco", value="72 lpm"),
-            SummaryHighlightDTO(icon_key="steps", icon="steps", label="Pasos", value="2.400"),
-            SummaryHighlightDTO(icon_key="medication", icon="medication", label="Adherencia", value="95%")
+            SummaryHighlightDTO(icon_key="heart", icon="heart", label="Ritmo cardíaco", value=hr_val),
+            SummaryHighlightDTO(icon_key="steps", icon="steps", label="Pasos", value=steps_val),
+            SummaryHighlightDTO(icon_key="medication", icon="medication", label="Adherencia", value=f"{adherence_pct}%")
         ],
         latest_vitals=[]
     )
@@ -206,7 +250,7 @@ async def get_patient_today_summary(
 async def invite_member_to_patient(
     patient_id: str,
     data: InviteMemberRequest,
-    membership: PatientMember = Depends(get_patient_membership),
+    membership: PatientMember = Depends(require_patient_roles(["family"])),
     db: AsyncSession = Depends(get_db)
 ):
     raw_token = f"inv_{uuid.uuid4().hex}"
@@ -289,7 +333,7 @@ async def list_circle_of_care(
 async def bind_wearable(
     patient_id: str,
     data: WearableBindRequest,
-    membership: PatientMember = Depends(get_patient_membership),
+    membership: PatientMember = Depends(require_patient_roles(["family", "caregiver"])),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(Wearable).where(Wearable.patient_id == patient_id)

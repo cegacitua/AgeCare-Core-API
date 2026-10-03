@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 import uuid
+import time
+from loguru import logger
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -18,11 +20,11 @@ from app.core.security import decode_token
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Create tables if dev / testing
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Startup
+    logger.info(f"🚀 Iniciando aplicación {settings.PROJECT_NAME} (v{settings.VERSION})")
     yield
     # Shutdown
+    logger.info("🛑 Apagando aplicación y desconectando base de datos...")
     await async_engine.dispose()
 
 
@@ -55,9 +57,23 @@ app.add_exception_handler(Exception, global_exception_handler)
 async def add_request_id_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", f"req_{uuid.uuid4().hex[:12]}")
     request.state.request_id = request_id
-    response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id
-    return response
+    
+    start_time = time.time()
+    
+    with logger.contextualize(request_id=request_id):
+        logger.info(f"Recibida petición {request.method} {request.url.path}")
+        try:
+            response = await call_next(request)
+            process_time = time.time() - start_time
+            response.headers["X-Request-ID"] = request_id
+            response.headers["X-Process-Time"] = str(process_time)
+            
+            logger.info(f"Petición procesada | status={response.status_code} | tiempo={process_time:.4f}s")
+            return response
+        except Exception as e:
+            process_time = time.time() - start_time
+            logger.error(f"Error procesando petición | tiempo={process_time:.4f}s | error={str(e)}")
+            raise
 
 
 # Include API v1 Router

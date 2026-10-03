@@ -16,7 +16,7 @@ from app.schemas.medication import (
     LogDoseRequest,
     AdherenceMetricsResponse
 )
-from app.api.deps import get_current_user, get_patient_membership
+from app.api.deps import get_current_user, get_patient_membership, require_patient_roles
 
 router = APIRouter(tags=["Plan de Medicamentos y Adherencia"])
 
@@ -25,7 +25,7 @@ router = APIRouter(tags=["Plan de Medicamentos y Adherencia"])
 async def create_medication(
     patient_id: str,
     data: MedicationCreate,
-    membership: PatientMember = Depends(get_patient_membership),
+    membership: PatientMember = Depends(require_patient_roles(["family", "doctor", "caregiver"])),
     db: AsyncSession = Depends(get_db)
 ):
     med = Medication(
@@ -96,7 +96,7 @@ async def update_medication(
     patient_id: str,
     med_id: str,
     data: MedicationUpdate,
-    membership: PatientMember = Depends(get_patient_membership),
+    membership: PatientMember = Depends(require_patient_roles(["family", "doctor", "caregiver"])),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(Medication).where(Medication.id == med_id, Medication.patient_id == patient_id)
@@ -127,7 +127,7 @@ async def update_medication(
 async def discontinue_medication(
     patient_id: str,
     med_id: str,
-    membership: PatientMember = Depends(get_patient_membership),
+    membership: PatientMember = Depends(require_patient_roles(["family", "doctor"])),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(Medication).where(Medication.id == med_id, Medication.patient_id == patient_id)
@@ -210,27 +210,60 @@ async def get_adherence_metrics(
     db: AsyncSession = Depends(get_db)
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    stmt = select(ScheduledDose).where(
+    stmt = select(ScheduledDose, Medication).join(Medication, ScheduledDose.medication_id == Medication.id).where(
         ScheduledDose.patient_id == patient_id,
         ScheduledDose.scheduled_at >= cutoff
     )
     res = await db.execute(stmt)
-    doses = res.scalars().all()
+    rows = res.all()
 
-    total = len(doses)
-    taken = sum(1 for d in doses if d.status == "taken")
-    rate = (taken / total * 100.0) if total > 0 else 95.0
+    total = len(rows)
+    taken = sum(1 for d, m in rows if d.status == "taken")
+    rate = (taken / total * 100.0) if total > 0 else 100.0
+
+    # Group by day
+    from collections import defaultdict
+    day_stats = defaultdict(lambda: {"total": 0, "taken": 0})
+    med_stats = defaultdict(lambda: {"total": 0, "taken": 0, "name": ""})
+
+    for dose, med in rows:
+        d_str = dose.scheduled_at.date().isoformat()
+        day_stats[d_str]["total"] += 1
+        med_stats[med.id]["total"] += 1
+        med_stats[med.id]["name"] = med.name
+        if dose.status == "taken":
+            day_stats[d_str]["taken"] += 1
+            med_stats[med.id]["taken"] += 1
+
+    by_day = []
+    for d, stats in sorted(day_stats.items()):
+        by_day.append({
+            "date": d,
+            "pct": round((stats["taken"] / stats["total"] * 100.0), 1)
+        })
+
+    by_medication = []
+    for mid, stats in med_stats.items():
+        by_medication.append({
+            "medication_id": mid,
+            "medication_name": stats["name"],
+            "pct": round((stats["taken"] / stats["total"] * 100.0), 1)
+        })
+
+    # If no data, provide a fallback array for the frontend charts so they don't break
+    if not by_day:
+        by_day = [{"date": datetime.now(timezone.utc).isoformat(), "pct": 100.0}]
 
     return AdherenceMetricsResponse(
         pct=int(rate),
         period_days=days,
         total_scheduled=total,
         taken_count=taken,
-        missed_count=sum(1 for d in doses if d.status == "missed"),
-        postponed_count=sum(1 for d in doses if d.status == "postponed"),
+        missed_count=sum(1 for d, m in rows if d.status == "missed"),
+        postponed_count=sum(1 for d, m in rows if d.status == "postponed"),
         adherence_rate_pct=round(rate, 1),
-        by_day=[{"date": datetime.now(timezone.utc).isoformat(), "pct": round(rate, 1)}],
-        by_medication=[{"medication_id": "m-1", "medication_name": "Losartán", "pct": round(rate, 1)}]
+        by_day=by_day,
+        by_medication=by_medication
     )
 
 

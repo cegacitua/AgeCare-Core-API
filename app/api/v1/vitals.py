@@ -130,7 +130,6 @@ async def get_latest_vitals(
 ):
     types = ["heart_rate", "spo2", "sleep", "steps"]
     items = []
-    now_utc = datetime.now(timezone.utc)
 
     for t in types:
         query = select(VitalReading).where(
@@ -144,16 +143,8 @@ async def get_latest_vitals(
                 "type": r.type,
                 "value": r.value,
                 "measured_at": r.measured_at.isoformat(),
-                "in_range": True
+                "in_range": True # Ideally check threshold here
             })
-
-    if not items:
-        items = [
-            {"type": "heart_rate", "value": 72.0, "measured_at": now_utc.isoformat(), "in_range": True},
-            {"type": "spo2", "value": 97.0, "measured_at": now_utc.isoformat(), "in_range": True},
-            {"type": "sleep", "value": 7.5, "measured_at": now_utc.isoformat(), "in_range": True},
-            {"type": "steps", "value": 2400.0, "measured_at": now_utc.isoformat(), "in_range": True}
-        ]
 
     return {"items": items}
 
@@ -232,11 +223,23 @@ async def get_wellbeing_summary(
         status_val = "ok"
         reason_val = "Estado del paciente normal y estable."
 
+    from app.models.medication import ScheduledDose
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt_doses = select(ScheduledDose).where(
+        ScheduledDose.patient_id == patient_id,
+        ScheduledDose.scheduled_at >= today_start
+    )
+    res_doses = await db.execute(stmt_doses)
+    doses = res_doses.scalars().all()
+    total_doses = len(doses)
+    taken_doses = sum(1 for d in doses if d.status == "taken")
+    adherence_pct = (taken_doses / total_doses * 100.0) if total_doses > 0 else 100.0
+
     return WellbeingSummaryResponse(
         patient_id=patient_id,
         status=status_val,
         reason=reason_val,
         last_vitals={},
         active_alerts_count=alert_count,
-        medication_adherence_pct=95.0
+        medication_adherence_pct=adherence_pct
     )

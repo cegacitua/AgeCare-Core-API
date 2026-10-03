@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,11 +53,32 @@ async def ask_assistant(
     )
     db.add(user_msg)
 
-    # 2. Simulated AI response based on medical record
-    ai_text = f"Analizando la historia clínica del paciente: Respecto a tu pregunta '{data.question}', el paciente ha registrado sus signos vitales de manera estable en los últimos 7 días. Su adherencia a medicamentos es del 95% y no registra alergias agudas."
+    # 2. Dynamic response based on real data
+    from app.models.vital import VitalReading
+    from app.models.medication import Medication
+    
+    # Get last vitals
+    stmt_v = select(VitalReading).where(VitalReading.patient_id == patient_id).order_by(VitalReading.measured_at.desc()).limit(3)
+    res_v = await db.execute(stmt_v)
+    vitals = res_v.scalars().all()
+    vitals_summary = ", ".join([f"{v.type}: {v.value}" for v in vitals]) if vitals else "Sin registros"
+
+    # Get medications
+    stmt_m = select(Medication).where(Medication.patient_id == patient_id, Medication.discontinued_at.is_(None))
+    res_m = await db.execute(stmt_m)
+    meds = res_m.scalars().all()
+    meds_summary = ", ".join([m.name for m in meds]) if meds else "Sin medicamentos"
+
+    ai_text = (
+        f"He analizado la historia clínica respecto a tu consulta: '{data.question}'.\n\n"
+        f"🩺 **Signos vitales recientes**: {vitals_summary}\n"
+        f"💊 **Medicamentos activos**: {meds_summary}\n\n"
+        f"(Nota: Esta es una respuesta dinámica basada en los datos reales del paciente en la BD)."
+    )
+
     sources = [
-        {"title": "Plan de Medicamentos", "category": "Receta", "date": "2026-09-15"},
-        {"title": "Registro de Presión Arterial", "category": "Vitals", "date": "2026-09-28"}
+        {"title": "Plan de Medicamentos", "category": "Receta", "date": datetime.now(timezone.utc).strftime("%Y-%m-%d")},
+        {"title": "Registro de Signos Vitales", "category": "Vitals", "date": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
     ]
 
     ai_msg = AssistantMessage(
