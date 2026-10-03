@@ -16,6 +16,14 @@ from app.models.alert import Alert
 
 async def seed_data():
     async with AsyncSessionLocal() as session:
+        from sqlalchemy import select
+        # Verificar si ya existe para evitar errores en reinicios del contenedor
+        stmt = select(User).where(User.email == "demo@agecare.app")
+        res = await session.execute(stmt)
+        if res.scalar_one_or_none():
+            print("⚠️ La base de datos ya contiene datos iniciales. Omitiendo seed_db.")
+            return
+
         # 1. Crear Usuario
         user = User(
             email="demo@agecare.app",
