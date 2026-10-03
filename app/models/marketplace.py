@@ -11,8 +11,8 @@ class MarketplaceProduct(Base, ModelMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str] = mapped_column(String(50), nullable=False)  # mobility | hygiene | safety | comfort | tech
     description: Mapped[str] = mapped_column(String(2000), nullable=False)
-    photos: Mapped[Optional[Any]] = mapped_column(JSON, default=list, nullable=True)
-    price_range: Mapped[str] = mapped_column(String(100), nullable=False)
+    image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    price: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     external_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     contact_info: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

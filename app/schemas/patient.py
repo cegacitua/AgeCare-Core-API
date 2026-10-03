@@ -29,6 +29,11 @@ class PatientMemberResponse(BaseModel):
     is_owner: bool
     user_name: Optional[str] = None
     user_email: Optional[str] = None
+    member_id: Optional[str] = None
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    status: str = "accepted"
+    joined_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

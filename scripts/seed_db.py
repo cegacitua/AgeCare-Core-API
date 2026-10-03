@@ -31,7 +31,7 @@ async def seed_data():
             full_name="Roberto Gómez (Abuelo)",
             birth_date=date(1945, 5, 12),
             sex="M",
-            conditions=[{"name":"Hipertensión"}, {"name": "Diabetes Tipo 2"}]
+            conditions=["Hipertensión", "Diabetes Tipo 2"]
         )
         session.add(patient)
         await session.flush()

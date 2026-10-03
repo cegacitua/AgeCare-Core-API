@@ -39,8 +39,10 @@ class CaregiverProfileCreateUpdate(BaseModel):
 
 class CaregiverProfileResponse(BaseModel):
     id: str
+    profile_id: Optional[str] = None
     user_id: str
-    user_name: Optional[str] = None
+    name: Optional[str] = None
+    photo_url: Optional[str] = None
     headline: str
     bio: str
     years_experience: int
@@ -50,8 +52,9 @@ class CaregiverProfileResponse(BaseModel):
     certifications: Optional[List[str]] = []
     is_listed: bool
     is_featured: bool
-    rating_avg: float
+    rating: float = 0.0
     reviews_count: int
+    price_per_hour: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 

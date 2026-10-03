@@ -8,8 +8,8 @@ class MarketplaceProductResponse(BaseModel):
     name: str
     category: str
     description: str
-    photos: Optional[List[str]] = []
-    price_range: str
+    image_url: Optional[str] = None
+    price: float = 0.0
     external_url: Optional[str] = None
     contact_info: str
 

@@ -25,16 +25,19 @@ class ResolveAlertRequest(BaseModel):
 
 
 class NotificationSettingResponse(BaseModel):
-    user_id: str
-    alert_type: str
-    push_enabled: bool
+    sms_enabled: bool = False
+    whatsapp_enabled: bool = False
+    push_enabled: bool = True
+    email_enabled: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationSettingUpdate(BaseModel):
-    alert_type: str
-    push_enabled: bool
+    sms_enabled: Optional[bool] = None
+    whatsapp_enabled: Optional[bool] = None
+    push_enabled: Optional[bool] = None
+    email_enabled: Optional[bool] = None
 
 
 class TriggerSOSRequest(BaseModel):

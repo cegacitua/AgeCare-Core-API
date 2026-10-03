@@ -32,8 +32,10 @@ class DocumentResponse(BaseModel):
     category: str
     doc_date: Optional[date] = None
     uploaded_by: str
+    uploader_name: Optional[str] = None
     blob_path: Optional[str] = None
     download_url: Optional[str] = None
+    file_url: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

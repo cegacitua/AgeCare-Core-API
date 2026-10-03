@@ -261,7 +261,7 @@ async def get_adherence_metrics(
         taken_count=taken,
         missed_count=sum(1 for d, m in rows if d.status == "missed"),
         postponed_count=sum(1 for d, m in rows if d.status == "postponed"),
-        adherence_rate_pct=round(rate, 1),
+        adherence_pct=round(rate, 1),
         by_day=by_day,
         by_medication=by_medication
     )

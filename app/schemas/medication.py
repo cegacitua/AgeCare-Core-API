@@ -80,7 +80,7 @@ class AdherenceMetricsResponse(BaseModel):
     taken_count: int = 13
     missed_count: int = 1
     postponed_count: int = 0
-    adherence_rate_pct: float = 95.0
+    adherence_pct: float = 95.0
     by_day: List[Dict[str, Any]] = [
         {"date": "2026-09-28T00:00:00Z", "pct": 95.0}
     ]

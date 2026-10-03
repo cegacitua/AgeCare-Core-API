@@ -20,7 +20,7 @@ from app.api.deps import get_current_user
 router = APIRouter(prefix="/marketplace", tags=["Marketplace Vitrina"])
 
 
-@router.get("/caregivers", response_model=List[CaregiverProfileResponse])
+@router.get("/caregivers")
 async def search_caregivers(
     zone: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
@@ -35,9 +35,12 @@ async def search_caregivers(
     out = []
     for prof, user in rows:
         p_res = CaregiverProfileResponse.model_validate(prof)
-        p_res.user_name = user.full_name
+        p_res.profile_id = prof.id
+        p_res.name = user.full_name
+        p_res.photo_url = user.photo_url
+        p_res.rating = prof.rating_avg
         out.append(p_res)
-    return out
+    return {"items": out}
 
 
 @router.get("/caregivers/{profile_id}", response_model=CaregiverProfileResponse)
@@ -55,7 +58,10 @@ async def get_caregiver_public_profile(
 
     prof, user = row
     p_res = CaregiverProfileResponse.model_validate(prof)
-    p_res.user_name = user.full_name
+    p_res.profile_id = prof.id
+    p_res.name = user.full_name
+    p_res.photo_url = user.photo_url
+    p_res.rating = prof.rating_avg
     return p_res
 
 
@@ -116,7 +122,7 @@ async def rate_caregiver(
     return res_dto
 
 
-@router.get("/products", response_model=List[MarketplaceProductResponse])
+@router.get("/products")
 async def list_products(
     category: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
@@ -128,14 +134,16 @@ async def list_products(
     res = await db.execute(query)
     prods = res.scalars().all()
     if not prods:
+        import uuid
         sample = MarketplaceProduct(
+            id=str(uuid.uuid4()),
             name="Silla de Ruedas Ergonómica Plegable",
             category="mobility",
             description="Silla liviana de aluminio con apoyabrazos acolchados y frenos de seguridad.",
-            photos=["https://agecarestorage.blob.core.windows.net/agecare-documents/products/silla.jpg"],
-            price_range="$120.000 - $150.000",
+            image_url="https://agecarestorage.blob.core.windows.net/agecare-documents/products/silla.jpg",
+            price=120000.0,
             contact_info="ventas@ortopedia.cl"
         )
-        return [MarketplaceProductResponse.model_validate(sample)]
+        return {"items": [MarketplaceProductResponse.model_validate(sample)]}
 
-    return [MarketplaceProductResponse.model_validate(p) for p in prods]
+    return {"items": [MarketplaceProductResponse.model_validate(p) for p in prods]}

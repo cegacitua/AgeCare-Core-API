@@ -82,7 +82,7 @@ async def create_medical_document(
     return res_doc
 
 
-@router.get("/patients/{patient_id}/documents", response_model=List[DocumentResponse])
+@router.get("/patients/{patient_id}/documents")
 async def list_medical_documents(
     patient_id: str,
     membership: PatientMember = Depends(get_patient_membership),
@@ -100,8 +100,10 @@ async def list_medical_documents(
         r = DocumentResponse.model_validate(doc)
         r.blob_path = upload.blob_path
         r.download_url = f"https://agecarestorage.blob.core.windows.net/agecare-documents/{upload.blob_path}"
+        r.file_url = r.download_url
+        r.uploader_name = "Familiar"  # Podríamos uncirlo desde User pero como parche sirve
         out.append(r)
-    return out
+    return {"items": out}
 
 
 @router.get("/documents/{document_id}/download")

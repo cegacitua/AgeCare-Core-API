@@ -309,7 +309,7 @@ async def accept_invitation(
     return {"message": "Te has unido al círculo de cuidado exitosamente."}
 
 
-@router.get("/patients/{patient_id}/members", response_model=List[PatientMemberResponse])
+@router.get("/patients/{patient_id}/members")
 async def list_circle_of_care(
     patient_id: str,
     membership: PatientMember = Depends(get_patient_membership),
@@ -326,8 +326,12 @@ async def list_circle_of_care(
         m_res = PatientMemberResponse.model_validate(mem)
         m_res.user_name = user.full_name
         m_res.user_email = user.email
+        m_res.member_id = mem.id
+        m_res.full_name = user.full_name
+        m_res.email = user.email
+        m_res.joined_at = mem.created_at
         out.append(m_res)
-    return out
+    return {"items": out}
 
 
 @router.post("/patients/{patient_id}/wearable", response_model=WearableStatusResponse)
