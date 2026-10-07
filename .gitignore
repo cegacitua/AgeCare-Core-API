@@ -29,5 +29,6 @@ htmlcov/
 # IDE & Editor Configs
 .idea/
 .vscode/
+.agents/
 *.swp
 *.swo
